@@ -12,6 +12,7 @@ export interface Player {
   isHuman: boolean;
   profile: BotProfile | null;
   pnl: number;
+  lastRoundPnl: number;
   cash: number;
   inventory: number;
   currentEstimate: number;

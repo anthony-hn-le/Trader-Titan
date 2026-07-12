@@ -55,29 +55,42 @@ export function quoteMarket(estimate: number, winningSpread: number, profile: Bo
   const ask = bid + winningSpread;
   const [bidSize, askSize] =
     profile === "aggressive"
-      ? [randInt(3, 5, rng), randInt(3, 5, rng)]
+      ? [randInt(15, 40, rng), randInt(15, 40, rng)]
       : profile === "conservative"
-        ? [randInt(1, 2, rng), randInt(1, 2, rng)]
-        : [randInt(1, 4, rng), randInt(1, 4, rng)];
+        ? [randInt(3, 10, rng), randInt(3, 10, rng)]
+        : [randInt(5, 25, rng), randInt(5, 25, rng)];
   return { bid, ask, bidSize, askSize };
+}
+
+export interface TradeDecision {
+  action: TradeAction;
+  size: number;
+}
+
+/** How many contracts of the available `depth` a bot of this profile lifts/hits. */
+function sizeFor(depth: number, profile: BotProfile, rng: RngFn): number {
+  if (depth <= 0) return 0;
+  if (profile === "aggressive") return depth;
+  if (profile === "conservative") return Math.min(depth, randInt(1, 2, rng));
+  return randInt(1, depth, rng);
 }
 
 /**
  * Ported from Player.decide_trade. The "random" profile deliberately ignores
  * price entirely (a dumb/noise trader) — do not turn this into a valuation check.
  */
-export function decideTrade(estimate: number, market: MarketState, profile: BotProfile, rng: RngFn): TradeAction {
+export function decideTrade(estimate: number, market: MarketState, profile: BotProfile, rng: RngFn): TradeDecision {
   const { bid, ask, bidSize, askSize } = market;
   if (profile === "aggressive") {
-    if (estimate > ask && askSize > 0) return "buy";
-    if (estimate < bid && bidSize > 0) return "sell";
+    if (estimate > ask && askSize > 0) return { action: "buy", size: sizeFor(askSize, profile, rng) };
+    if (estimate < bid && bidSize > 0) return { action: "sell", size: sizeFor(bidSize, profile, rng) };
   } else if (profile === "conservative") {
-    if (estimate > ask * 1.1 && askSize > 0) return "buy";
-    if (estimate < bid * 0.9 && bidSize > 0) return "sell";
+    if (estimate > ask * 1.1 && askSize > 0) return { action: "buy", size: sizeFor(askSize, profile, rng) };
+    if (estimate < bid * 0.9 && bidSize > 0) return { action: "sell", size: sizeFor(bidSize, profile, rng) };
   } else {
     const choice = rng();
-    if (choice > 0.8 && askSize > 0) return "buy";
-    if (choice < 0.2 && bidSize > 0) return "sell";
+    if (choice > 0.8 && askSize > 0) return { action: "buy", size: sizeFor(askSize, profile, rng) };
+    if (choice < 0.2 && bidSize > 0) return { action: "sell", size: sizeFor(bidSize, profile, rng) };
   }
-  return "pass";
+  return { action: "pass", size: 0 };
 }

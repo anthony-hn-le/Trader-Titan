@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCountdown } from "@/hooks/useCountdown";
 
 interface CountdownRingProps {
   endsAt: number;
@@ -8,14 +8,7 @@ interface CountdownRingProps {
 }
 
 export function CountdownRing({ endsAt, totalMs }: CountdownRingProps) {
-  const [remainingMs, setRemainingMs] = useState(() => Math.max(0, endsAt - Date.now()));
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setRemainingMs(Math.max(0, endsAt - Date.now()));
-    }, 100);
-    return () => clearInterval(id);
-  }, [endsAt]);
+  const remainingMs = useCountdown(endsAt);
 
   const fraction = totalMs > 0 ? remainingMs / totalMs : 0;
   const seconds = Math.ceil(remainingMs / 1000);

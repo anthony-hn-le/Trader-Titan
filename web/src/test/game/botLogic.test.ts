@@ -69,30 +69,36 @@ describe("quoteMarket", () => {
 describe("decideTrade", () => {
   const market = { bid: 90, ask: 100, bidSize: 5, askSize: 5 };
 
-  it("aggressive buys when estimate > ask, sells when estimate < bid", () => {
-    expect(decideTrade(150, market, "aggressive", () => 0.5)).toBe("buy");
-    expect(decideTrade(50, market, "aggressive", () => 0.5)).toBe("sell");
-    expect(decideTrade(95, market, "aggressive", () => 0.5)).toBe("pass");
+  it("aggressive buys when estimate > ask, sells when estimate < bid, always lifting/hitting the full depth", () => {
+    expect(decideTrade(150, market, "aggressive", () => 0.5)).toEqual({ action: "buy", size: 5 });
+    expect(decideTrade(50, market, "aggressive", () => 0.5)).toEqual({ action: "sell", size: 5 });
+    expect(decideTrade(95, market, "aggressive", () => 0.5)).toEqual({ action: "pass", size: 0 });
   });
 
-  it("conservative requires a wider margin (ask*1.1 / bid*0.9)", () => {
-    expect(decideTrade(105, market, "conservative", () => 0.5)).toBe("pass"); // > ask but not > ask*1.1
-    expect(decideTrade(115, market, "conservative", () => 0.5)).toBe("buy");
-    expect(decideTrade(85, market, "conservative", () => 0.5)).toBe("pass"); // < bid but not < bid*0.9
-    expect(decideTrade(75, market, "conservative", () => 0.5)).toBe("sell");
+  it("conservative requires a wider margin (ask*1.1 / bid*0.9) and takes a small clip", () => {
+    expect(decideTrade(105, market, "conservative", () => 0.5).action).toBe("pass"); // > ask but not > ask*1.1
+    const buy = decideTrade(115, market, "conservative", () => 0.5);
+    expect(buy.action).toBe("buy");
+    expect(buy.size).toBeGreaterThanOrEqual(1);
+    expect(buy.size).toBeLessThanOrEqual(2);
+    expect(decideTrade(85, market, "conservative", () => 0.5).action).toBe("pass"); // < bid but not < bid*0.9
+    const sell = decideTrade(75, market, "conservative", () => 0.5);
+    expect(sell.action).toBe("sell");
+    expect(sell.size).toBeGreaterThanOrEqual(1);
+    expect(sell.size).toBeLessThanOrEqual(2);
   });
 
   it("random profile ignores price and rolls purely on rng() thresholds", () => {
     // choice > 0.8 -> buy
-    expect(decideTrade(1, market, "random", () => 0.81)).toBe("buy");
-    expect(decideTrade(1, market, "random", () => 0.8)).toBe("pass"); // boundary is exclusive
+    expect(decideTrade(1, market, "random", () => 0.81).action).toBe("buy");
+    expect(decideTrade(1, market, "random", () => 0.8).action).toBe("pass"); // boundary is exclusive
     // choice < 0.2 -> sell
-    expect(decideTrade(999, market, "random", () => 0.19)).toBe("sell");
-    expect(decideTrade(999, market, "random", () => 0.2)).toBe("pass"); // boundary is exclusive
+    expect(decideTrade(999, market, "random", () => 0.19).action).toBe("sell");
+    expect(decideTrade(999, market, "random", () => 0.2).action).toBe("pass"); // boundary is exclusive
   });
 
   it("random profile respects size constraints even when the roll says trade", () => {
-    expect(decideTrade(1, { ...market, askSize: 0 }, "random", () => 0.9)).toBe("pass");
-    expect(decideTrade(999, { ...market, bidSize: 0 }, "random", () => 0.1)).toBe("pass");
+    expect(decideTrade(1, { ...market, askSize: 0 }, "random", () => 0.9)).toEqual({ action: "pass", size: 0 });
+    expect(decideTrade(999, { ...market, bidSize: 0 }, "random", () => 0.1)).toEqual({ action: "pass", size: 0 });
   });
 });

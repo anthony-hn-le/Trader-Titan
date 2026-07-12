@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useGameStore } from "@/stores/gameStore";
+import { ROUND_INTRO_MS, useGameStore } from "@/stores/gameStore";
 import { saveRecentGame } from "@/lib/game/recentGames";
 import { RoundHeader } from "@/components/game/RoundHeader";
 import { CountdownRing } from "@/components/game/CountdownRing";
@@ -41,7 +41,6 @@ export default function PlayPage() {
   const actionEndsAt = useGameStore((s) => s.actionEndsAt);
   const timerMs = useGameStore((s) => s.timerMs);
 
-  const beginRound = useGameStore((s) => s.beginRound);
   const submitSpreadBid = useGameStore((s) => s.submitSpreadBid);
   const proceedToQuoting = useGameStore((s) => s.proceedToQuoting);
   const submitMarketQuote = useGameStore((s) => s.submitMarketQuote);
@@ -125,17 +124,16 @@ export default function PlayPage() {
         totalRounds={questions.length}
         question={currentQuestion.question}
         clue={CLUE_VISIBLE_PHASES.has(phase) ? currentQuestion.clue : null}
+        timerEndsAt={phase === "round-intro" ? actionEndsAt : null}
+        timerTotalMs={ROUND_INTRO_MS}
       />
 
       {showChrome && <MarketTicker market={market} />}
-      {actionEndsAt !== null && <CountdownRing endsAt={actionEndsAt} totalMs={timerMs} />}
+      {actionEndsAt !== null && phase !== "round-intro" && <CountdownRing endsAt={actionEndsAt} totalMs={timerMs} />}
 
       <div className="flex w-full max-w-2xl flex-col items-center gap-4 rounded-xl bg-white p-6 ring-1 ring-foreground/10 dark:bg-zinc-950">
         {phase === "round-intro" && (
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-sm text-muted-foreground">Get ready to bid a spread.</p>
-            <Button onClick={beginRound}>Start bidding</Button>
-          </div>
+          <p className="text-sm text-muted-foreground">Get ready to bid a spread...</p>
         )}
 
         {phase === "spread-bidding" && <SpreadBidPanel onSubmit={submitSpreadBid} />}
@@ -162,7 +160,7 @@ export default function PlayPage() {
           (currentTurnId === undefined ? (
             <p className="text-sm text-muted-foreground">Wrapping up this trading round...</p>
           ) : isHumanTurn ? (
-            <TradeDecisionPanel onDecide={submitTradeDecision} />
+            <TradeDecisionPanel market={market} onDecide={submitTradeDecision} />
           ) : (
             <p className="text-sm text-muted-foreground">
               {players.find((p) => p.id === currentTurnId)?.name} is deciding...

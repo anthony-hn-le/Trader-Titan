@@ -18,6 +18,7 @@ import {
 import { useConfigStore } from "./configStore";
 
 const ROUNDS_PER_GAME = 5;
+export const ROUND_INTRO_MS = 5000;
 const EMPTY_MARKET: MarketState = { bid: 0, ask: 0, bidSize: 0, askSize: 0 };
 
 let logCounter = 0;
@@ -28,10 +29,10 @@ function makeLog(text: string): ActivityEntry {
 
 function initialPlayers(): Player[] {
   return [
-    { id: "human", name: "Human (You)", isHuman: true, profile: null, pnl: 0, cash: 0, inventory: 0, currentEstimate: 0 },
-    { id: "alpha", name: "Bot Alpha", isHuman: false, profile: "aggressive", pnl: 0, cash: 0, inventory: 0, currentEstimate: 0 },
-    { id: "beta", name: "Bot Beta", isHuman: false, profile: "conservative", pnl: 0, cash: 0, inventory: 0, currentEstimate: 0 },
-    { id: "gamma", name: "Bot Gamma", isHuman: false, profile: "random", pnl: 0, cash: 0, inventory: 0, currentEstimate: 0 },
+    { id: "human", name: "Human (You)", isHuman: true, profile: null, pnl: 0, lastRoundPnl: 0, cash: 0, inventory: 0, currentEstimate: 0 },
+    { id: "alpha", name: "Bot Alpha", isHuman: false, profile: "aggressive", pnl: 0, lastRoundPnl: 0, cash: 0, inventory: 0, currentEstimate: 0 },
+    { id: "beta", name: "Bot Beta", isHuman: false, profile: "conservative", pnl: 0, lastRoundPnl: 0, cash: 0, inventory: 0, currentEstimate: 0 },
+    { id: "gamma", name: "Bot Gamma", isHuman: false, profile: "random", pnl: 0, lastRoundPnl: 0, cash: 0, inventory: 0, currentEstimate: 0 },
   ];
 }
 
@@ -60,7 +61,7 @@ interface GameState {
   proceedToQuoting: () => void;
   submitMarketQuote: (quote: QuoteInput) => void;
   processTradingTurn: () => void;
-  submitTradeDecision: (action: TradeAction) => void;
+  submitTradeDecision: (action: TradeAction, size?: number) => void;
   proceedToRequote: () => void;
   submitRequote: (update: boolean, quote?: QuoteInput) => void;
   showRoundLeaderboard: () => void;
@@ -68,8 +69,8 @@ interface GameState {
   tick: () => void;
   resetToLobby: () => void;
 
-  /** Internal: applies a buy/sell/pass action from `playerId` against the shared market. */
-  executeTrade: (playerId: PlayerId, action: TradeAction) => void;
+  /** Internal: applies a buy/sell/pass action from `playerId` against the shared market, clamped to available depth. */
+  executeTrade: (playerId: PlayerId, action: TradeAction, size: number) => void;
   enterTrading1: () => void;
   enterTrading2: () => void;
   settleRound: () => void;
@@ -109,7 +110,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       activityLog: [],
       tradeTurnOrder: [],
       tradeTurnIndex: 0,
-      actionEndsAt: null,
+      actionEndsAt: Date.now() + ROUND_INTRO_MS,
       timerMs,
     });
   },
@@ -199,7 +200,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  executeTrade: (playerId, action) => {
+  executeTrade: (playerId, action, size) => {
     const state = get();
     const mmId = state.marketMakerId!;
     const player = state.players.find((p) => p.id === playerId)!;
@@ -208,28 +209,30 @@ export const useGameStore = create<GameState>((set, get) => ({
     let text: string;
 
     if (action === "buy") {
-      if (market.askSize <= 0) {
+      const qty = Math.min(size, market.askSize);
+      if (qty <= 0) {
         text = `${player.name} wanted to BUY but no asks remaining in market.`;
       } else {
         players = players.map((p) => {
-          if (p.id === playerId) return { ...p, inventory: p.inventory + 1, cash: p.cash - market.ask };
-          if (p.id === mmId) return { ...p, inventory: p.inventory - 1, cash: p.cash + market.ask };
+          if (p.id === playerId) return { ...p, inventory: p.inventory + qty, cash: p.cash - market.ask * qty };
+          if (p.id === mmId) return { ...p, inventory: p.inventory - qty, cash: p.cash + market.ask * qty };
           return p;
         });
-        market = { ...market, askSize: market.askSize - 1 };
-        text = `${player.name} BOUGHT 1 @ ${market.ask}`;
+        market = { ...market, askSize: market.askSize - qty };
+        text = `${player.name} BOUGHT ${qty} @ ${market.ask}`;
       }
     } else if (action === "sell") {
-      if (market.bidSize <= 0) {
+      const qty = Math.min(size, market.bidSize);
+      if (qty <= 0) {
         text = `${player.name} wanted to SELL but no bids remaining in market.`;
       } else {
         players = players.map((p) => {
-          if (p.id === playerId) return { ...p, inventory: p.inventory - 1, cash: p.cash + market.bid };
-          if (p.id === mmId) return { ...p, inventory: p.inventory + 1, cash: p.cash - market.bid };
+          if (p.id === playerId) return { ...p, inventory: p.inventory - qty, cash: p.cash + market.bid * qty };
+          if (p.id === mmId) return { ...p, inventory: p.inventory + qty, cash: p.cash - market.bid * qty };
           return p;
         });
-        market = { ...market, bidSize: market.bidSize - 1 };
-        text = `${player.name} SOLD 1 @ ${market.bid}`;
+        market = { ...market, bidSize: market.bidSize - qty };
+        text = `${player.name} SOLD ${qty} @ ${market.bid}`;
       }
     } else {
       text = `${player.name} passed.`;
@@ -258,12 +261,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
 
-    const action = decideTrade(player.currentEstimate, state.market, player.profile!, Math.random);
-    get().executeTrade(turnId, action);
+    const { action, size } = decideTrade(player.currentEstimate, state.market, player.profile!, Math.random);
+    get().executeTrade(turnId, action, size);
     set((s) => ({ tradeTurnIndex: s.tradeTurnIndex + 1, actionEndsAt: null }));
   },
 
-  submitTradeDecision: (action) => {
+  submitTradeDecision: (action, size = 1) => {
     const state = get();
     if (state.phase !== "trading-1" && state.phase !== "trading-2") return;
     const turnId = state.tradeTurnOrder[state.tradeTurnIndex];
@@ -271,7 +274,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const player = state.players.find((p) => p.id === turnId)!;
     if (!player.isHuman) return;
 
-    get().executeTrade(turnId, action);
+    get().executeTrade(turnId, action, action === "pass" ? 0 : size);
     set((s) => ({ tradeTurnIndex: s.tradeTurnIndex + 1, actionEndsAt: null }));
   },
 
@@ -331,7 +334,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const state = get();
     const trueAnswer = state.questions[state.roundNum - 1].answer;
     const roundPnls = state.players.map((p) => computeRoundPnl(p.cash, p.inventory, trueAnswer));
-    const players = state.players.map((p, i) => ({ ...p, pnl: p.pnl + roundPnls[i] }));
+    const players = state.players.map((p, i) => ({ ...p, pnl: p.pnl + roundPnls[i], lastRoundPnl: roundPnls[i] }));
     const log = [
       ...state.activityLog,
       makeLog(`The true answer was ${trueAnswer}!`),
@@ -365,7 +368,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       activityLog: [],
       tradeTurnOrder: [],
       tradeTurnIndex: 0,
-      actionEndsAt: null,
+      actionEndsAt: Date.now() + ROUND_INTRO_MS,
       players: resetRoundState(state.players),
     });
   },
@@ -374,6 +377,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     const state = get();
     if (state.actionEndsAt === null || Date.now() < state.actionEndsAt) return;
     switch (state.phase) {
+      case "round-intro":
+        get().beginRound();
+        break;
       case "spread-bidding":
         get().submitSpreadBid(Number.MAX_SAFE_INTEGER);
         break;
