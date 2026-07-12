@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Trader Titan — web
 
-## Getting Started
+The Next.js/React port of the game. For rules, design notes, and the CLI prototype, see the [root README](../README.md).
 
-First, run the development server:
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
+npm test           # Vitest suite: bot logic, settlement, game store
+npm run lint
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+No environment variables or backend services required — the game runs entirely client-side.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · Zustand · Vitest
 
-## Learn More
+## Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/app/                 lobby ("/") and the game screen ("/play")
+src/components/game/     in-round UI: question card, spread bidding, market quoting, trade panel, leaderboard
+src/components/lobby/    lobby-only UI: rules blurb, answer-timer slider, recent games
+src/components/shared/   site chrome: header, footer, theme toggle
+src/lib/game/            pure game logic: types, bot strategy, settlement math, trivia question bank
+src/stores/              Zustand stores: gameStore (phase machine + all round state), configStore (persisted settings)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Connected to Vercel via the `anthony-hn-le/Trader-Titan` GitHub repo, with this directory (`web`) set as the project's Root Directory — every push to `main` deploys automatically.
