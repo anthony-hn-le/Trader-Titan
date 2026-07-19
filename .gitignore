@@ -4,3 +4,8 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# local Claude Code guidance, not for the public repo
+CLAUDE.md
+web/CLAUDE.md
+docs/agents/
